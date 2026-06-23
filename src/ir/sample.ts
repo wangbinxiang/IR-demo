@@ -1,0 +1,103 @@
+import type { IR } from './types'
+
+// 写死的示例 IR：一张登录卡片。
+// 结构：root(列) > card(列) > [标题, 邮箱输入, 密码输入, 登录按钮, 一行(链接×2)]
+// 这个结构既有纵向列表（适合验证重排序），又有一个横向行（验证跨容器/换轴拖拽）。
+export const sampleIR: IR = {
+  rootId: 'root',
+  nodes: {
+    root: {
+      id: 'root',
+      type: 'frame',
+      parentId: null,
+      childIds: ['card'],
+      width: { mode: 'fixed', value: 420 }, // 画板宽
+      height: { mode: 'hug' },
+      layout: { direction: 'col', gap: 0, padding: 24, align: 'center', justify: 'start' },
+      style: { fill: '#f4f4f5' },
+      props: {},
+    },
+    card: {
+      id: 'card',
+      type: 'frame',
+      parentId: 'root',
+      childIds: ['title', 'email', 'password', 'submit', 'links'],
+      width: { mode: 'fill' }, // 填满 root 内宽
+      height: { mode: 'hug' },
+      layout: { direction: 'col', gap: 16, padding: 24, align: 'stretch', justify: 'start' },
+      style: { fill: '#ffffff', radius: 16, borderColor: '#e4e4e7', borderWidth: 1 },
+      props: {},
+    },
+    title: {
+      id: 'title',
+      type: 'text',
+      parentId: 'card',
+      childIds: [],
+      width: { mode: 'hug' },
+      height: { mode: 'hug' },
+      style: { color: '#18181b', fontSize: 24, fontWeight: 700 },
+      props: { text: '登录账户' },
+    },
+    email: {
+      id: 'email',
+      type: 'input',
+      parentId: 'card',
+      childIds: [],
+      width: { mode: 'fill' },
+      height: { mode: 'fixed', value: 44 },
+      style: { fill: '#ffffff', borderColor: '#d4d4d8', borderWidth: 1, radius: 8, color: '#71717a', fontSize: 14 },
+      props: { placeholder: '邮箱' },
+    },
+    password: {
+      id: 'password',
+      type: 'input',
+      parentId: 'card',
+      childIds: [],
+      width: { mode: 'fill' },
+      height: { mode: 'fixed', value: 44 },
+      style: { fill: '#ffffff', borderColor: '#d4d4d8', borderWidth: 1, radius: 8, color: '#71717a', fontSize: 14 },
+      props: { placeholder: '密码' },
+    },
+    submit: {
+      id: 'submit',
+      type: 'button',
+      parentId: 'card',
+      childIds: [],
+      width: { mode: 'fill' },
+      height: { mode: 'fixed', value: 44 },
+      style: { fill: '#4f46e5', color: '#ffffff', radius: 8, fontSize: 15, fontWeight: 600 },
+      props: { text: '登录' },
+    },
+    links: {
+      id: 'links',
+      type: 'box',
+      parentId: 'card',
+      childIds: ['forgot', 'signup'],
+      width: { mode: 'fill' },
+      height: { mode: 'hug' },
+      layout: { direction: 'row', gap: 8, padding: 0, align: 'center', justify: 'between' },
+      style: {},
+      props: {},
+    },
+    forgot: {
+      id: 'forgot',
+      type: 'text',
+      parentId: 'links',
+      childIds: [],
+      width: { mode: 'hug' },
+      height: { mode: 'hug' },
+      style: { color: '#6366f1', fontSize: 13 },
+      props: { text: '忘记密码？' },
+    },
+    signup: {
+      id: 'signup',
+      type: 'text',
+      parentId: 'links',
+      childIds: [],
+      width: { mode: 'hug' },
+      height: { mode: 'hug' },
+      style: { color: '#6366f1', fontSize: 13 },
+      props: { text: '注册' },
+    },
+  },
+}
