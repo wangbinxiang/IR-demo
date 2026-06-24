@@ -18,7 +18,7 @@ const before = await page.evaluate(() => {
 })
 
 // 输入 prompt 并点击生成
-await page.fill('input[placeholder*="描述"]', '一个商品卡片，包含图片、标题、价格和一个加入购物车按钮')
+await page.fill('textarea[placeholder*="描述"]', '一个商品卡片，包含图片、标题、价格和一个加入购物车按钮')
 await page.click('text=✨ 生成')
 
 // 等待生成完成：IR 节点集合发生变化（新根 id 或节点数变化），最多 90s

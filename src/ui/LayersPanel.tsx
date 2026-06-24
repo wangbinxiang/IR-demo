@@ -3,6 +3,7 @@ import { useIRStore } from '../ir/store'
 import type { IRNode, NodeId, NodeType } from '../ir/types'
 import { isContainer } from '../ir/types'
 import { shapeIdFor } from '../canvas/sync'
+import { MAIN_VIEWPORT } from '../layout/responsive'
 import { useSelection } from './selection'
 
 // 左侧图层结构树（类 Figma）：
@@ -41,7 +42,8 @@ export function LayersPanel() {
   // 点击图层 → 选中画布形状（触发选中监听更新 useSelection）
   const selectNode = (id: NodeId) => {
     const editor = (window as unknown as { __editor?: { select: (id: unknown) => void } }).__editor
-    editor?.select(shapeIdFor(id))
+    // 图层点击 → 选中主视口对应形状（其余视口为只读预览）
+    editor?.select(shapeIdFor(MAIN_VIEWPORT, id))
   }
 
   const renderRow = (id: NodeId, depth: number): React.ReactNode => {

@@ -21,7 +21,7 @@ await page.waitForFunction(() => window.__project.getState().id !== null, null, 
 const pid = await page.evaluate(() => window.__project.getState().id)
 
 const editAndCapture = async (instruction) => {
-  await page.fill('input', instruction)
+  await page.fill('textarea', instruction)
   const respP = page.waitForResponse((r) => r.url().includes('/api/edit'), { timeout: 90000 })
   await page.click('text=🪄 改图')
   const body = await (await respP).json()

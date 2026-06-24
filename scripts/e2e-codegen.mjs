@@ -40,11 +40,19 @@ const source = await page.evaluate(() => document.querySelector('pre')?.textCont
 
 await browser.close()
 
+// —— 响应式断言：导出 CSS 含两个 @media 断点块，且 mobile 块内某容器塌成纵向 ——
+const hasTabletMedia = source.includes('@media (max-width: 1024px)')
+const hasMobileMedia = source.includes('@media (max-width: 640px)')
+// 640 块内应出现 flex-direction: column（features 容器在 mobile 塌列）
+const mobileBlock = source.slice(source.indexOf('@media (max-width: 640px)'))
+const mobileCollapses = hasMobileMedia && mobileBlock.includes('flex-direction: column')
+
 console.log('console errors:', errors.length ? errors : '无')
 console.log('iframe 缺失文案:', missing.length ? missing : '无（全部渲染）')
 console.log('生成结构:', JSON.stringify(tags))
 console.log('源码含 flex 布局:', source.includes('display: flex'))
 console.log('源码含 box-sizing:', source.includes('box-sizing: border-box'))
+console.log('@media 1024:', hasTabletMedia, ' @media 640:', hasMobileMedia, ' 640内塌列:', mobileCollapses)
 
 console.log('input placeholders:', tags.placeholders)
 const pass =
@@ -54,6 +62,9 @@ const pass =
   tags.buttons === 1 &&
   placeholdersOk &&
   tags.flexContainers >= 3 &&
-  source.includes('display: flex')
-console.log('\n结果:', pass ? '✅ PASS —— IR→HTML/CSS 生成正确，真实浏览器渲染一致' : '❌ FAIL')
+  source.includes('display: flex') &&
+  hasTabletMedia &&
+  hasMobileMedia &&
+  mobileCollapses
+console.log('\n结果:', pass ? '✅ PASS —— IR→HTML/CSS 生成正确（含响应式 @media），真实浏览器渲染一致' : '❌ FAIL')
 process.exit(pass ? 0 : 1)

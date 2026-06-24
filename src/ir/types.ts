@@ -9,7 +9,7 @@ export type NodeId = string // 稳定字符串 ID，AI 改图时必须保留
 // 尺寸三态：对应 Figma 的 Hug / Fill / Fixed，可干净映射到 CSS
 export type Sizing =
   | { mode: 'hug' } // 包裹内容   → width:auto / fit-content
-  | { mode: 'fill' } // 填满父级   → flex:1 / 100%
+  | { mode: 'fill'; max?: number } // 填满父级   → flex:1 / 100%；max 为可选上限（仅宽度，→ max-width:Npx）
   | { mode: 'fixed'; value: number } // 固定像素 → width:Npx
 
 // 容器的 auto-layout 配置（flex 语义）
@@ -30,6 +30,7 @@ export interface StyleProps {
   radius?: number // 圆角
   fontSize?: number // 字号
   fontWeight?: number // 字重
+  shadow?: number // 阴影 elevation 预设（0/1/2/3；0 或省略=无）。仅画布+HTML，RN 忽略
 }
 
 // 节点类型：混合词汇——语义原子 + 通用 Box 逃生门

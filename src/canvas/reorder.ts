@@ -28,6 +28,15 @@ export function resolveDrop(
   point: { x: number; y: number },
 ): DropTarget | null {
   const excluded = descendants(ir, draggedId) // 自身 + 子树都不能当目标
+  // 拖到「自己的直接兄弟（及其子树）」上应理解为重排、而非嵌套进它：
+  // 把兄弟子树也排除出候选容器 → 落点解析会回退到共享父级做相邻插入。
+  // （只影响「兄弟本身是容器」的情况，如固定尺寸的 box 互拖；兄弟是 text 等非容器时本就不是目标。）
+  const dragged = ir.nodes[draggedId]
+  if (dragged.parentId) {
+    for (const sib of ir.nodes[dragged.parentId].childIds) {
+      if (sib !== draggedId) descendants(ir, sib, excluded)
+    }
+  }
 
   // 1) 找到「包含落点」且层级最深的合法容器（面积最小者≈最深）
   let best: { id: NodeId; area: number } | null = null

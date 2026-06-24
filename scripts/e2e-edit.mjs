@@ -19,7 +19,7 @@ const before = await page.evaluate(() => {
 })
 
 // 下达修改指令并点「改图」
-await page.fill('input', '把登录按钮改成绿色，并在标题下面加一句副标题“欢迎回来”')
+await page.fill('textarea', '把登录按钮改成绿色，并在标题下面加一句副标题“欢迎回来”')
 await page.click('text=🪄 改图')
 
 // 等待 IR 变化（节点数变化 或 submit 颜色变化），最多 90s

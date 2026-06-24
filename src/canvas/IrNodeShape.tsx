@@ -4,12 +4,15 @@ import { useIRStore } from '../ir/store'
 import { resolveDrop } from './reorder'
 import { getCurrentLayout } from './sync'
 import { insertionLine, useDragIndicator } from './indicator'
+import { MAIN_VIEWPORT } from '../layout/responsive'
+import { LINE_HEIGHT_RATIO } from '../layout/yoga'
+import { shadowCSS, BUTTON_PAD_X, BUTTON_PAD_Y } from '../ir/style-presets'
 
-// tldraw 形状类型：每个 IR 节点对应一个。props 里只放渲染所需的派生数据
-// （w/h 由布局算出，nodeId 指回 IR），事实来源仍是 IR store。
+// tldraw 形状类型：每个 IR 节点 × 每个视口对应一个。props 里只放渲染所需的派生数据
+// （w/h 由布局算出，nodeId 指回 IR，viewport 标明所属画板），事实来源仍是 IR store。
 export type IrNodeShape = TLBaseShape<
   'ir-node',
-  { w: number; h: number; nodeId: string; depth: number }
+  { w: number; h: number; nodeId: string; depth: number; viewport: string }
 >
 
 // 根据 IR 节点类型渲染真实 DOM —— 「画布所见 ≈ HTML emitter 产物」
@@ -25,6 +28,8 @@ function renderNode(node: IRNode): React.CSSProperties & { content?: string } {
     color: s.color,
     fontSize: s.fontSize,
     fontWeight: s.fontWeight as React.CSSProperties['fontWeight'],
+    lineHeight: LINE_HEIGHT_RATIO, // 与 yoga 测量/HTML 导出统一行高，折行高度才一致
+    boxShadow: shadowCSS(s.shadow), // 阴影预设，与 HTML 导出一致
   }
   return base
 }
@@ -33,11 +38,12 @@ export class IrNodeShapeUtil extends BaseBoxShapeUtil<IrNodeShape> {
   static override type = 'ir-node' as const
 
   override getDefaultProps(): IrNodeShape['props'] {
-    return { w: 100, h: 40, nodeId: '', depth: 0 }
+    return { w: 100, h: 40, nodeId: '', depth: 0, viewport: MAIN_VIEWPORT }
   }
 
-  // 容器允许被点选但其背景不拦截子节点的命中（pointerEvents 在 component 里控制）
-  override canResize = () => true
+  // 缩放仅主视口可用（tldraw 无 canMove；移动只读由 onTranslate/End 守卫 + 吸附回位实现）。
+  // 非主视口仍可点选 → 样式面板/AI 编辑（编辑的是同一 IR 节点）。
+  override canResize = (shape: IrNodeShape) => shape.props.viewport === MAIN_VIEWPORT
   override canBind = () => false
 
   override component(shape: IrNodeShape) {
@@ -64,14 +70,13 @@ export class IrNodeShapeUtil extends BaseBoxShapeUtil<IrNodeShape> {
     }
 
     const isLeaf = node.type !== 'frame' && node.type !== 'box'
+    const isText = node.type === 'text'
     const flexCenter: React.CSSProperties =
       node.type === 'button'
-        ? { display: 'flex', alignItems: 'center', justifyContent: 'center' }
+        ? { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: `${BUTTON_PAD_Y}px ${BUTTON_PAD_X}px` }
         : node.type === 'input'
           ? { display: 'flex', alignItems: 'center', padding: '0 12px' }
-          : node.type === 'text'
-            ? { display: 'flex', alignItems: 'center' }
-            : {}
+          : {} // text 不用 flex 居中：按块级文本自然从上往下排，和 CSS 块级 div 一致
 
     return (
       <HTMLContainer
@@ -80,8 +85,11 @@ export class IrNodeShapeUtil extends BaseBoxShapeUtil<IrNodeShape> {
           ...flexCenter,
           // 容器背景不应拦截对子形状的点击；叶子可交互
           pointerEvents: isLeaf ? 'all' : 'none',
-          overflow: 'hidden',
-          whiteSpace: 'nowrap', // hug 文本是单行，禁止折行裁切
+          // 文本：允许折行（与 yoga measure / CSS 块级一致）；其余单行不折
+          whiteSpace: isText ? 'normal' : 'nowrap',
+          overflowWrap: isText ? 'break-word' : undefined,
+          wordBreak: isText ? 'break-word' : undefined,
+          overflow: isText ? 'visible' : 'hidden', // 文本不裁切（高度已按折行算准）
           fontFamily: 'system-ui, sans-serif',
           userSelect: 'none',
         }}
@@ -97,6 +105,7 @@ export class IrNodeShapeUtil extends BaseBoxShapeUtil<IrNodeShape> {
 
   // —— 拖拽过程中：实时计算落点并画插入指示线（Figma 手感）——
   override onTranslate(_initial: IrNodeShape, current: IrNodeShape) {
+    if (current.props.viewport !== MAIN_VIEWPORT) return // 只读视口不参与重排
     const { ir } = useIRStore.getState()
     const layout = getCurrentLayout()
     if (!layout) return
@@ -107,6 +116,11 @@ export class IrNodeShapeUtil extends BaseBoxShapeUtil<IrNodeShape> {
 
   // —— 核心：自由拖拽 → 解释成 auto-layout 重排序 ——
   override onTranslateEnd(_initial: IrNodeShape, current: IrNodeShape) {
+    if (current.props.viewport !== MAIN_VIEWPORT) {
+      // 只读视口：不重排，bump 一次触发 relayout 让被拖形状吸附回原位
+      useIRStore.setState((st) => ({ version: st.version + 1 }))
+      return
+    }
     useDragIndicator.getState().set(null) // 收起指示线
     const { ir, moveNode } = useIRStore.getState()
     const layout = getCurrentLayout()

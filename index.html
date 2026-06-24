@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎨</text></svg>" />
     <title>IR-demo · 垂直切片</title>
+    <style>
+      /* 禁用触摸板横向滑动触发的浏览器前进/后退手势（画布要横向 pan，避免误触后退） */
+      html, body {
+        overscroll-behavior-x: none; /* 关掉横轴 overscroll → 不再触发 back/forward 导航 */
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

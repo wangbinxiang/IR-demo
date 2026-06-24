@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import { compileDSL, type DSLNode } from '../compiler/dsl'
 import { outlineIR, type Op } from '../ir/ops'
 import { useIRStore } from '../ir/store'
@@ -13,6 +13,18 @@ export function PromptBar() {
   const [prompt, setPrompt] = useState('一个简洁的登录页面，有标题、邮箱和密码输入框、登录按钮')
   const [busy, setBusy] = useState<null | 'gen' | 'edit'>(null)
   const [error, setError] = useState<string | null>(null)
+  const taRef = useRef<HTMLTextAreaElement>(null)
+
+  // 多行自适应：按内容增高，封顶 MAX_H 后内部滚动
+  const MAX_H = 140
+  const autosize = () => {
+    const el = taRef.current
+    if (!el) return
+    el.style.height = 'auto' // 先重置才能正确测量内容高 scrollHeight
+    el.style.height = Math.min(el.scrollHeight, MAX_H) + 'px' // 跟随内容、封顶
+    el.style.overflowY = el.scrollHeight > MAX_H ? 'auto' : 'hidden' // 超上限才出滚动条
+  }
+  useLayoutEffect(() => autosize(), []) // 首屏按初始文案定高
 
   const generate = async () => {
     if (!prompt.trim() || busy) return
@@ -60,12 +72,24 @@ export function PromptBar() {
 
   return (
     <div style={wrap}>
-      <input
+      <textarea
+        ref={taRef}
+        data-prompt
         style={input}
         value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && generate()}
-        placeholder="描述要生成的 UI，或要对当前 UI 做的修改…"
+        onChange={(e) => {
+          setPrompt(e.target.value)
+          autosize() // 每次输入重算高度
+        }}
+        onKeyDown={(e) => {
+          // Enter 生成、Shift+Enter 换行（多行输入）
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            generate()
+          }
+        }}
+        rows={1}
+        placeholder="描述要生成的 UI，或要对当前 UI 做的修改…（Shift+Enter 换行）"
         disabled={!!busy}
       />
       <button style={{ ...genBtn, opacity: busy ? 0.6 : 1 }} onClick={generate} disabled={!!busy}>
@@ -86,7 +110,7 @@ const wrap: React.CSSProperties = {
   transform: 'translateX(-50%)',
   zIndex: 1000,
   display: 'flex',
-  alignItems: 'center',
+  alignItems: 'flex-start', // 多行增高时按钮顶对齐第一行
   gap: 8,
   padding: 8,
   background: '#fff',
@@ -98,12 +122,17 @@ const wrap: React.CSSProperties = {
 }
 const input: React.CSSProperties = {
   flex: 1,
-  height: 38,
-  padding: '0 12px',
+  minHeight: 38, // 单行时与按钮等高
+  maxHeight: 140, // 与 MAX_H 一致：封顶后内部滚动
+  padding: '8px 12px', // 垂直内边距让单行文字居中
   border: '1px solid #e4e4e7',
   borderRadius: 8,
   fontSize: 14,
+  lineHeight: '20px',
   outline: 'none',
+  resize: 'none', // 禁用手动拖拽缩放，交给自适应
+  fontFamily: 'inherit', // textarea 默认等宽字体 → 跟随面板字体
+  boxSizing: 'border-box',
 }
 const genBtn: React.CSSProperties = {
   height: 38,

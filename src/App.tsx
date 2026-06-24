@@ -3,6 +3,7 @@ import { Tldraw, type Editor, type TLComponents } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { IrNodeShapeUtil } from './canvas/IrNodeShape'
 import { DragIndicator } from './canvas/DragIndicator'
+import { ViewportLabels } from './canvas/ViewportLabels'
 import { syncToCanvas } from './canvas/sync'
 import { initYoga } from './layout/yoga'
 import { useIRStore } from './ir/store'
@@ -19,7 +20,8 @@ const shapeUtils = [IrNodeShapeUtil]
 // 保留 tldraw 自带 UI（菜单/工具栏/缩放等），只隐藏它自带的样式面板：
 // 那个面板改的是 tldraw 形状属性，对我们每次 relayout 覆盖的几何无效，且与右侧面板重复。
 const components: TLComponents = {
-  InFrontOfTheCanvas: DragIndicator,
+  InFrontOfTheCanvas: DragIndicator, // 拖拽插入线
+  OnTheCanvas: ViewportLabels, // 三画板标题标签
   StylePanel: null,
 }
 
@@ -39,10 +41,25 @@ export default function App() {
   useEffect(() => {
     if (!ready || !editorRef.current) return
     syncToCanvas(editorRef.current, ir)
-    // 首次形状建好后框选居中（onMount 时形状还没建好，zoomToFit 是空操作）
+    // 首次形状建好后定位相机（onMount 时形状还没建好，是空操作）。
+    // 三画板很宽：先 zoomToBounds 取得合适缩放，再平移让最左画板避开左侧图层面板/顶部命令栏。
+    // （inset 会把内容居中于整个视口，无法单独让左侧让位，故改用平移。）
     if (!didFit.current) {
-      editorRef.current.zoomToFit()
-      didFit.current = true
+      const ed = editorRef.current
+      const bounds = ed.getCurrentPageBounds()
+      if (bounds) {
+        // 安全区：避开左侧图层面板(右缘~232)、顶部命令栏(~110)、底部工具条(~90)
+        const LEFT = 250, TOP = 150, RIGHT_MARGIN = 30, BOTTOM_MARGIN = 100
+        const vsb = ed.getViewportScreenBounds()
+        // 按安全区反算缩放：让三画板正好塞进可视区（取宽/高较小者，且不放大超过 1）
+        const z = Math.min((vsb.w - LEFT - RIGHT_MARGIN) / bounds.w, (vsb.h - TOP - BOTTOM_MARGIN) / bounds.h, 1)
+        ed.setCamera({ x: 0, y: 0, z }) // 先定缩放
+        const cur = ed.pageToScreen({ x: bounds.minX, y: bounds.minY }) // 当前内容左上角屏幕坐标
+        const cam = ed.getCamera()
+        // 平移：把内容左上角落到 (LEFT, TOP)
+        ed.setCamera({ x: cam.x + (LEFT - cur.x) / z, y: cam.y + (TOP - cur.y) / z, z })
+        didFit.current = true
+      }
     }
   }, [ready, version, ir])
 
