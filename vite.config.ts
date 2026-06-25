@@ -1,7 +1,7 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// 开发中间件：POST /api/generate —— 调本地 Claude Code 把 prompt 生成 DSL。
+// 开发中间件：POST /api/generate —— 按前端选择的 AI 源和模型把 prompt 生成 DSL。
 // 放在 Vite 进程内，无需单开后端/代理。
 function aiBackend(): Plugin {
   return {
@@ -15,16 +15,16 @@ function aiBackend(): Plugin {
         try {
           const chunks: Buffer[] = []
           for await (const c of req) chunks.push(c as Buffer)
-          const { prompt } = JSON.parse(Buffer.concat(chunks).toString() || '{}')
+          const { prompt, provider, model } = JSON.parse(Buffer.concat(chunks).toString() || '{}')
           if (!prompt || typeof prompt !== 'string') {
             res.statusCode = 400
             return res.end(JSON.stringify({ error: 'prompt 必填' }))
           }
           // 懒加载，避免 SDK 初始化拖慢配置加载
           const { generateDSL } = await import('./server/generate.mjs')
-          const dsl = await generateDSL(prompt)
+          const result = await generateDSL(prompt, provider, model)
           res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify({ dsl }))
+          res.end(JSON.stringify(result))
         } catch (e) {
           res.statusCode = 500
           res.setHeader('Content-Type', 'application/json')
@@ -41,15 +41,15 @@ function aiBackend(): Plugin {
         try {
           const chunks: Buffer[] = []
           for await (const c of req) chunks.push(c as Buffer)
-          const { outline, instruction, sessionKey } = JSON.parse(Buffer.concat(chunks).toString() || '{}')
+          const { outline, instruction, sessionKey, provider, model } = JSON.parse(Buffer.concat(chunks).toString() || '{}')
           if (!outline || !instruction) {
             res.statusCode = 400
             return res.end(JSON.stringify({ error: 'outline 与 instruction 必填' }))
           }
           const { generateOps } = await import('./server/edit.mjs')
-          const result = await generateOps(outline, instruction, sessionKey)
+          const result = await generateOps(outline, instruction, sessionKey, provider, model)
           res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify({ ops: result.ops ?? [], resumed: result.resumed }))
+          res.end(JSON.stringify({ ops: result.ops ?? [], resumed: result.resumed, provider: result.provider, model: result.model }))
         } catch (e) {
           res.statusCode = 500
           res.setHeader('Content-Type', 'application/json')

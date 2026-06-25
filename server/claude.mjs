@@ -1,23 +1,14 @@
 // 共享的本地 Claude Code 调用器：给定 system + prompt，返回解析后的 JSON。
 // 支持 resume 复用会话（会话保温/对话式连续编辑），并回传 sessionId。
 import { query } from '@anthropic-ai/claude-agent-sdk'
+import { extractJSON, repairPrompt } from './json.mjs'
 
-const MODEL = process.env.IR_MODEL || 'claude-sonnet-4-6'
-
-// 从模型输出里抠出 JSON（去围栏、取首个 { 到末个 }）
-function extractJSON(text) {
-  let t = text.trim()
-  t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-  const start = t.indexOf('{')
-  const end = t.lastIndexOf('}')
-  if (start === -1 || end === -1) throw new Error('输出中未找到 JSON 对象')
-  return JSON.parse(t.slice(start, end + 1))
-}
+const DEFAULT_MODEL = process.env.IR_MODEL || 'claude-sonnet-4-6'
 
 // 单次调用。system 为空则不带（resume 时系统提示已在会话里）。resume 为已有会话 id。
-async function runOnce(system, prompt, resume) {
+async function runOnce(system, prompt, resume, model) {
   const options = {
-    model: MODEL,
+    model: model || DEFAULT_MODEL,
     allowedTools: [],
     maxTurns: 1,
     permissionMode: 'bypassPermissions',
@@ -38,10 +29,12 @@ async function runOnce(system, prompt, resume) {
 }
 
 // 对外：返回 { data, sessionId }。带一次解析失败重试。
-export async function runJSON(system, prompt, opts = {}) {
+export async function runClaudeJSON(system, prompt, opts = {}) {
   try {
-    return await runOnce(system, prompt, opts.resume)
+    return await runOnce(system, prompt, opts.resume, opts.model)
   } catch (e) {
-    return await runOnce(system, `${prompt}\n\n（上次输出无法解析：${e.message}。请只输出一个合法 JSON 对象。）`, opts.resume)
+    return await runOnce(system, repairPrompt(prompt, e), opts.resume, opts.model)
   }
 }
+
+export const runJSON = runClaudeJSON

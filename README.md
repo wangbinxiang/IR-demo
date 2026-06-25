@@ -47,13 +47,16 @@ node scripts/e2e.mjs   # Playwright 驱动真实拖拽，断言 IR 顺序改变
 
 ## AI 生成（已实现）
 
-顶部提示词栏 → `/api/generate`（Vite 中间件）→ `@anthropic-ai/claude-agent-sdk` 进程内调**本地 Claude Code**（零 key，走订阅额度）→ 产出紧凑 DSL → `compileDSL` 确定性展开为 IR（系统分配稳定 ID）→ 载入画布。
+顶部提示词栏选择 AI 源（`Claude Code` / `Codex App`）与模型 → `/api/generate`（Vite 中间件）→ provider 分发层 → 产出紧凑 DSL → `compileDSL` 确定性展开为 IR（系统分配稳定 ID）→ 载入画布。
 
-- `server/generate.mjs`：prompt → DSL（禁用工具、`settingSources:[]`、带一次重试）
+- `server/ai.mjs`：AI 源分发；前端选哪个源，后端只调用哪个源，不做隐式 fallback
+- `server/claude.mjs`：Claude Code provider（禁用工具、`settingSources:[]`、带一次重试）
+- `server/codex.mjs`：Codex App provider（`@openai/codex-sdk`、只读 sandbox、临时空目录、JSON 解析重试）
+- `server/generate.mjs`：prompt → DSL
 - `src/compiler/dsl.ts`：DSL → 扁平 IR
-- `src/ui/PromptBar.tsx`：提示词栏
+- `src/ui/PromptBar.tsx`：提示词栏 + AI 源/模型选择器（按源写入 localStorage，支持自定义模型 ID）
 - 验证：`node scripts/e2e-ai.mjs`（输入 prompt→点生成→断言画布换成新 IR）
-- 模型默认 `claude-sonnet-4-6`，可用 `IR_MODEL` 环境变量覆盖
+- 前端选具体模型时会随请求覆盖环境默认；未选择时 Claude 走 `IR_MODEL` / `claude-sonnet-4-6`，Codex 走 `IR_CODEX_MODEL` / 本地 Codex 默认配置
 
 ## 代码生成（已实现：HTML/CSS）
 
@@ -80,7 +83,7 @@ node scripts/e2e.mjs   # Playwright 驱动真实拖拽，断言 IR 顺序改变
 
 - `src/ir/ops.ts`：op 词汇（setStyle/setProps/setLayout/setSizing/insert/remove/move）、`outlineIR`（喂 AI 的带 ID 概览）、`applyOps`（reducer）
 - op 与画布交互共用同一 mutation 层；insert 子树由编译器分配不冲突的新 ID
-- `server/edit.mjs` + `/api/edit` 中间件；`server/claude.mjs` 为生成/改图共享的 Claude 调用器
+- `server/edit.mjs` + `/api/edit` 中间件；`server/ai.mjs` 为生成/改图共享 provider 分发层
 - 顶部「🪄 改图」按钮；验证：`node scripts/e2e-edit.mjs`（断言原 ID 全保留 + 指令生效 + 画布同步）
 
 ## 右侧样式面板（已实现）
@@ -111,10 +114,10 @@ node scripts/e2e.mjs   # Playwright 驱动真实拖拽，断言 IR 顺序改变
 
 ## AI 改图会话保温（已实现）
 
-每个项目维持一个温会话（Agent SDK `resume`），实现**对话式连续编辑**：后续指令能理解「再大一点」「把它也改成那个色」等对前文的指代。
+每个项目、每个 AI 源分别维持一个温会话（Claude `resume` / Codex thread），实现**对话式连续编辑**：后续指令能理解「再大一点」「把它也改成那个色」等对前文的指代。
 
-- `server/claude.mjs`：`runJSON` 支持 `resume`、回传 `sessionId`
-- `server/edit.mjs`：按 sessionKey(项目 id) 维持会话 Map，resume 失败自动回退完整上下文
+- `server/claude.mjs` / `server/codex.mjs`：provider 调用器支持会话恢复、回传 `sessionId`
+- `server/edit.mjs`：按 provider + sessionKey(项目 id) 维持会话 Map，resume 失败自动回退完整上下文
 - 正确性：每轮仍发当前 outline（用户在画布/面板的 out-of-band 修改也被看见）
 - 验证：`node scripts/e2e-resume.mjs`（第二次改图 resumed:true + 指代消解命中）
 

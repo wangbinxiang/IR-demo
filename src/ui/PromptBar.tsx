@@ -4,6 +4,36 @@ import { outlineIR, type Op } from '../ir/ops'
 import { useIRStore } from '../ir/store'
 import { useProject } from './project'
 
+type AIProvider = 'claude' | 'codex'
+type ModelChoice = '' | 'claude-sonnet-4-6' | 'gpt-5.4' | 'custom'
+
+const AI_PROVIDER_KEY = 'ir-demo:ai-provider'
+const AI_MODEL_CHOICE_PREFIX = 'ir-demo:ai-model-choice:'
+const AI_CUSTOM_MODEL_PREFIX = 'ir-demo:ai-custom-model:'
+const providerLabels: Record<AIProvider, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex App',
+}
+const modelOptions: Record<AIProvider, Array<{ value: ModelChoice; label: string }>> = {
+  claude: [
+    { value: '', label: '默认模型' },
+    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+    { value: 'custom', label: '自定义模型' },
+  ],
+  codex: [
+    { value: '', label: '默认模型' },
+    { value: 'gpt-5.4', label: 'GPT-5.4' },
+    { value: 'custom', label: '自定义模型' },
+  ],
+}
+
+const readModelChoice = (provider: AIProvider): ModelChoice => {
+  const saved = localStorage.getItem(AI_MODEL_CHOICE_PREFIX + provider)
+  return modelOptions[provider].some((option) => option.value === saved) ? (saved as ModelChoice) : ''
+}
+
+const readCustomModel = (provider: AIProvider): string => localStorage.getItem(AI_CUSTOM_MODEL_PREFIX + provider) ?? ''
+
 // 顶部提示词栏：
 //  - 生成：prompt → DSL → 编译 IR → 整份载入画布
 //  - 改图：当前 IR 概览 + 指令 → AI 返回 op-patch → 套用（保留未改动节点的 ID）
@@ -11,9 +41,39 @@ export function PromptBar() {
   const loadIR = useIRStore((s) => s.loadIR)
   const applyOps = useIRStore((s) => s.applyOps)
   const [prompt, setPrompt] = useState('一个简洁的登录页面，有标题、邮箱和密码输入框、登录按钮')
+  const [provider, setProviderState] = useState<AIProvider>(() => {
+    const saved = localStorage.getItem(AI_PROVIDER_KEY)
+    return saved === 'codex' ? 'codex' : 'claude'
+  })
+  const [modelChoices, setModelChoices] = useState<Record<AIProvider, ModelChoice>>(() => ({
+    claude: readModelChoice('claude'),
+    codex: readModelChoice('codex'),
+  }))
+  const [customModels, setCustomModels] = useState<Record<AIProvider, string>>(() => ({
+    claude: readCustomModel('claude'),
+    codex: readCustomModel('codex'),
+  }))
   const [busy, setBusy] = useState<null | 'gen' | 'edit'>(null)
   const [error, setError] = useState<string | null>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
+  const modelChoice = modelChoices[provider]
+  const customModel = customModels[provider]
+  const model = modelChoice === 'custom' ? customModel.trim() : modelChoice || undefined
+
+  const setProvider = (next: AIProvider) => {
+    localStorage.setItem(AI_PROVIDER_KEY, next)
+    setProviderState(next)
+  }
+
+  const setModelChoice = (next: ModelChoice) => {
+    localStorage.setItem(AI_MODEL_CHOICE_PREFIX + provider, next)
+    setModelChoices((prev) => ({ ...prev, [provider]: next }))
+  }
+
+  const setCustomModel = (next: string) => {
+    localStorage.setItem(AI_CUSTOM_MODEL_PREFIX + provider, next)
+    setCustomModels((prev) => ({ ...prev, [provider]: next }))
+  }
 
   // 多行自适应：按内容增高，封顶 MAX_H 后内部滚动
   const MAX_H = 140
@@ -34,7 +94,7 @@ export function PromptBar() {
       const resp = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, provider, model }),
       })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`)
@@ -58,7 +118,7 @@ export function PromptBar() {
       const resp = await fetch('/api/edit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ outline, instruction: prompt, sessionKey }),
+        body: JSON.stringify({ outline, instruction: prompt, sessionKey, provider, model }),
       })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`)
@@ -92,6 +152,44 @@ export function PromptBar() {
         placeholder="描述要生成的 UI，或要对当前 UI 做的修改…（Shift+Enter 换行）"
         disabled={!!busy}
       />
+      <select
+        style={select}
+        value={provider}
+        onChange={(e) => setProvider(e.target.value as AIProvider)}
+        disabled={!!busy}
+        title="AI 源"
+        aria-label="AI 源"
+      >
+        {(Object.keys(providerLabels) as AIProvider[]).map((p) => (
+          <option key={p} value={p}>
+            {providerLabels[p]}
+          </option>
+        ))}
+      </select>
+      <select
+        style={modelSelect}
+        value={modelChoice}
+        onChange={(e) => setModelChoice(e.target.value as ModelChoice)}
+        disabled={!!busy}
+        title="模型"
+        aria-label="模型"
+      >
+        {modelOptions[provider].map((option) => (
+          <option key={option.value || 'default'} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {modelChoice === 'custom' && (
+        <input
+          style={customModelInput}
+          value={customModel}
+          onChange={(e) => setCustomModel(e.target.value)}
+          placeholder="模型 ID"
+          disabled={!!busy}
+          aria-label="自定义模型 ID"
+        />
+      )}
       <button style={{ ...genBtn, opacity: busy ? 0.6 : 1 }} onClick={generate} disabled={!!busy}>
         {busy === 'gen' ? '生成中…' : '✨ 生成'}
       </button>
@@ -118,10 +216,11 @@ const wrap: React.CSSProperties = {
   boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
   fontFamily: 'system-ui, sans-serif',
   // 宽度卡在左右面板之间，避免与图层/样式面板重叠
-  width: 'min(680px, calc(100vw - 540px))',
+  width: 'min(860px, calc(100vw - 540px))',
 }
 const input: React.CSSProperties = {
   flex: 1,
+  minWidth: 0,
   minHeight: 38, // 单行时与按钮等高
   maxHeight: 140, // 与 MAX_H 一致：封顶后内部滚动
   padding: '8px 12px', // 垂直内边距让单行文字居中
@@ -145,6 +244,32 @@ const genBtn: React.CSSProperties = {
   fontWeight: 600,
   cursor: 'pointer',
   whiteSpace: 'nowrap',
+}
+const select: React.CSSProperties = {
+  height: 38,
+  maxWidth: 132,
+  padding: '0 10px',
+  border: '1px solid #e4e4e7',
+  borderRadius: 8,
+  background: '#fff',
+  color: '#18181b',
+  fontSize: 13,
+  fontFamily: 'inherit',
+  outline: 'none',
+  cursor: 'pointer',
+}
+const modelSelect: React.CSSProperties = { ...select, maxWidth: 154 }
+const customModelInput: React.CSSProperties = {
+  height: 38,
+  width: 132,
+  padding: '0 10px',
+  border: '1px solid #e4e4e7',
+  borderRadius: 8,
+  color: '#18181b',
+  fontSize: 13,
+  fontFamily: 'inherit',
+  outline: 'none',
+  boxSizing: 'border-box',
 }
 const editBtn: React.CSSProperties = { ...genBtn, background: '#0891b2' }
 const err: React.CSSProperties = { color: '#dc2626', fontSize: 12, maxWidth: 160 }

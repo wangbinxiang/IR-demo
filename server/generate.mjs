@@ -1,5 +1,5 @@
-// AI 生成：prompt → 紧凑 DSL（JSON）。调本地 Claude Code。
-import { runJSON } from './claude.mjs'
+// AI 生成：prompt → 紧凑 DSL（JSON）。provider 由前端选择。
+import { normalizeModel, normalizeProvider, runAIJSON } from './ai.mjs'
 
 const SYSTEM_PROMPT = `你是一个 UI 设计编译器。把用户的自然语言需求转成描述 UI 的 JSON 树。
 
@@ -36,4 +36,10 @@ const SYSTEM_PROMPT = `你是一个 UI 设计编译器。把用户的自然语�
 - 颜色用十六进制。配色协调、间距合理，做出可直接预览的高质量 UI。
 - 不要输出 id 字段，id 由系统分配。`
 
-export const generateDSL = async (userPrompt) => (await runJSON(SYSTEM_PROMPT, userPrompt)).data
+export const generateDSL = async (userPrompt, provider, model) => {
+  const p = normalizeProvider(provider)
+  const m = normalizeModel(model)
+  // DSL 字段天然可省，复杂递归 schema 在不同 provider 上兼容性较差；这里靠 prompt + JSON 解析重试约束。
+  const { data } = await runAIJSON(p, SYSTEM_PROMPT, userPrompt, { model: m })
+  return { dsl: data, provider: p, model: m }
+}

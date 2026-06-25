@@ -1,5 +1,5 @@
-// AI 改图：当前 IR 概览 + 指令 → 一组编辑操作（op）。调本地 Claude Code。
-import { runJSON } from './claude.mjs'
+// AI 改图：当前 IR 概览 + 指令 → 一组编辑操作（op）。provider 由前端选择。
+import { normalizeModel, normalizeProvider, runAIJSON } from './ai.mjs'
 
 const SYSTEM_PROMPT = `你是一个 UI 编辑器的操作生成器。给你「当前 UI 的结构概览（每个节点带 #id）」和「用户的修改指令」，你要输出一组对现有节点的编辑操作。
 
@@ -24,22 +24,25 @@ const SYSTEM_PROMPT = `你是一个 UI 编辑器的操作生成器。给你「�
 // 每个项目(sessionKey)维持一个温会话 id，实现对话式连续编辑。
 const sessions = new Map()
 
-export async function generateOps(outline, instruction, sessionKey = '__default__') {
+export async function generateOps(outline, instruction, sessionKey = '__default__', provider, model) {
+  const p = normalizeProvider(provider)
+  const m = normalizeModel(model)
+  const scopedSessionKey = `${p}:${m || '__default__'}:${sessionKey}`
   // 仍每轮发当前 outline，保证用户在画布/面板上的 out-of-band 修改也被看见
   const prompt = `当前 UI 结构概览：\n${outline}\n\n用户修改指令：${instruction}\n\n请输出 { "ops": [...] }。`
-  const resume = sessions.get(sessionKey)
+  const resume = sessions.get(scopedSessionKey)
   try {
     // resume 时系统提示已在会话里，不重发；首轮才带完整 system
-    const { data, sessionId } = await runJSON(resume ? '' : SYSTEM_PROMPT, prompt, { resume })
-    if (sessionId) sessions.set(sessionKey, sessionId)
-    return { ops: data.ops ?? [], resumed: !!resume }
+    const { data, sessionId } = await runAIJSON(p, resume ? '' : SYSTEM_PROMPT, prompt, { resume, model: m })
+    if (sessionId) sessions.set(scopedSessionKey, sessionId)
+    return { ops: data.ops ?? [], resumed: !!resume, provider: p, model: m }
   } catch (e) {
     // 会话失效等 → 丢弃旧会话，用完整上下文重来一次
     if (resume) {
-      sessions.delete(sessionKey)
-      const { data, sessionId } = await runJSON(SYSTEM_PROMPT, prompt, {})
-      if (sessionId) sessions.set(sessionKey, sessionId)
-      return { ops: data.ops ?? [], resumed: false }
+      sessions.delete(scopedSessionKey)
+      const { data, sessionId } = await runAIJSON(p, SYSTEM_PROMPT, prompt, { model: m })
+      if (sessionId) sessions.set(scopedSessionKey, sessionId)
+      return { ops: data.ops ?? [], resumed: false, provider: p, model: m }
     }
     throw e
   }
