@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { BaseBoxShapeUtil, HTMLContainer, type TLBaseShape } from 'tldraw'
 import type { IRNode } from '../ir/types'
 import { useIRStore } from '../ir/store'
@@ -49,6 +50,8 @@ export class IrNodeShapeUtil extends BaseBoxShapeUtil<IrNodeShape> {
   override component(shape: IrNodeShape) {
     // 直接从 IR store 读节点定义来渲染（派生视图）
     const node = useIRStore((st) => st.ir.nodes[shape.props.nodeId])
+    // 图片加载失败标记 → 切回占位（hook 必须在任何 return 之前，保证调用顺序稳定）
+    const [imgError, setImgError] = useState(false)
     if (!node) return null
     const style = renderNode(node)
 
@@ -64,7 +67,22 @@ export class IrNodeShapeUtil extends BaseBoxShapeUtil<IrNodeShape> {
         inner = <span style={{ opacity: 0.7 }}>{node.props.placeholder}</span>
         break
       case 'image':
-        inner = <span style={{ opacity: 0.5 }}>🖼</span>
+        // 有 src 且未失败 → 渲染真图（object-fit:cover 与 HTML 导出一致，不变形）
+        // 容器自带 overflow:hidden + borderRadius，负责圆角裁切
+        if (node.props.src && !imgError) {
+          inner = (
+            <img
+              src={node.props.src}
+              alt=""
+              onError={() => setImgError(true)} // 加载失败 → 切回占位
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            />
+          )
+        } else if (node.props.src) {
+          // 有 src 但加载失败：用 🖼 兜底，避免浏览器原生裂图
+          inner = <span style={{ opacity: 0.5 }}>🖼</span>
+        }
+        // 无 src → inner 保持 null，露出节点背景盒（对齐预览的空 <div>）
         break
       // frame / box 是容器：只画背景，不放文字
     }

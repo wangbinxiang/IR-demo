@@ -32,6 +32,7 @@ const SYSTEM_PROMPT = `你是一个 UI 设计编译器。把用户的自然语�
 - 用嵌套 children 表达层级；用 frame/box + direction/gap/padding 表达布局。
 - 优先响应式：页面级的横向(row)容器与其子元素优先用 "fill"/"hug"，固定像素宽只用于图标、头像等真正定尺的小元素——避免在窄屏(手机)溢出。
 - 输入框、按钮等横向元素通常 width:"fill"。
+- 固定尺寸容器的 padding 必须明显小于该轴尺寸的一半：如顶栏写 height:36，padding 最多 16 左右（否则内容区被挤爆、布局错乱）。矮条优先只靠 height 控高、padding 留小值或仅靠 align 居中。
 - 颜色用十六进制。配色协调、间距合理，做出可直接预览的高质量 UI。
 - 不要输出 id 字段，id 由系统分配。`
 

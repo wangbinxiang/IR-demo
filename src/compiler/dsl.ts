@@ -42,6 +42,16 @@ export function parseSizing(v: DSLNode['width'], fallback: Sizing = { mode: 'hug
   return fallback
 }
 
+// 内边距钳制：固定尺寸的轴上，padding×2 必须「严格小于」该轴尺寸——内容区高度=0(边界)时
+// Yoga 仍会退化，把同层 hug 子节点主轴宽算成满宽 → 误判溢出 → 行被塌成列。故上限取 ⌊(尺寸-1)/2⌋
+// (保证 2×cap ≤ 尺寸-1 < 尺寸，内容区恒 >0)。单值 padding 同时受宽/高约束 → 取最小。hug/fill 轴不设限。
+export function clampPadding(padding: number, width: Sizing, height: Sizing): number {
+  let cap = Infinity
+  if (height.mode === 'fixed') cap = Math.min(cap, Math.floor((height.value! - 1) / 2)) // 固定高 → ≤⌊(h-1)/2⌋
+  if (width.mode === 'fixed') cap = Math.min(cap, Math.floor((width.value! - 1) / 2)) // 固定宽 → ≤⌊(w-1)/2⌋
+  return Math.max(0, Math.min(padding, cap)) // 取较小者并兜底非负(尺寸≤1 时 cap 可能为负)
+}
+
 function toStyle(n: DSLNode): StyleProps {
   // 先取嵌套 style（若有），再让顶层字段覆盖——两种写法都兼容
   const s: StyleProps = { ...(n.style ?? {}) }
@@ -85,7 +95,9 @@ export function compileTree(
       node.layout = {
         direction: d.direction ?? 'col',
         gap: d.gap ?? 0,
-        padding: d.padding ?? 0,
+        // 钳制内边距：固定尺寸的容器，padding×2 不得超过该轴尺寸，否则内容区被夹成≤0，
+        // Yoga 会把同层 hug 子节点的主轴宽算成满宽 → 误判溢出 → 行被塌成列(header 垮)。
+        padding: clampPadding(d.padding ?? 0, node.width, node.height),
         align: d.align ?? 'stretch',
         justify: d.justify ?? 'start',
       }

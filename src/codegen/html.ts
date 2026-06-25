@@ -88,6 +88,9 @@ function nodeCSS(ir: IR, node: IRNode): string[] {
   } else if (node.type === 'text') {
     // 文本：统一行高 1.4（与 yoga 测量、画布渲染一致，折行高度才对齐）+ 长词断行
     decls.push('line-height: 1.4', 'overflow-wrap: break-word')
+  } else if (node.type === 'image') {
+    // 图片按容器尺寸裁切填充、不拉伸（与画布 IrNodeShape 的 object-fit 一致）
+    decls.push('object-fit: cover')
   }
 
   const s = node.style

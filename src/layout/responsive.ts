@@ -70,6 +70,9 @@ function collapseRow(n: IRNode, nodes: Record<NodeId, IRNode>): void {
   if (!n.layout) return
   n.layout.direction = 'col'
   n.layout.align = 'stretch'
+  // 释放固定高：固定高度是为「横排单行」设计的，塌成竖排后内容明显变高，
+  // 若仍焊死会撑不开 → 内容溢出压住后续兄弟节点。改 hug 让容器抱紧竖排内容。
+  if (n.height.mode === 'fixed') n.height = { mode: 'hug' }
   for (const cid of n.childIds) {
     const c = nodes[cid]
     if (c && c.width.mode === 'fixed') c.width = { mode: 'fill' }
