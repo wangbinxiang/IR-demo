@@ -23,16 +23,18 @@ Claude Design + Figma 思路的原型：用 **Design IR** 作为事实来源，A
 ## 运行
 
 ```bash
-npm install
-npm run dev        # http://localhost:5173
+pnpm install
+pnpm dev           # dev server，端口随占用浮动（默认 5173）
 ```
 
 ## 验证
 
 ```bash
-npm run dev        # 另开终端先起服务
+pnpm dev               # 另开终端先起服务
 node scripts/e2e.mjs   # Playwright 驱动真实拖拽，断言 IR 顺序改变
 ```
+
+> 交接 / 移植本系统：先读根 [`CLAUDE.md`](CLAUDE.md)（常驻导航 + 雷区清单），深度文档见 [`docs/DESIGN-IR.md`](docs/DESIGN-IR.md)。
 
 ## 关键文件
 
